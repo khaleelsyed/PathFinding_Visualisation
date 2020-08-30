@@ -1,4 +1,5 @@
 import pygame
+from queue import PriorityQueue
 
 # pygame constants
 WINDOW_WIDTH = 800  # Pixels
@@ -21,6 +22,7 @@ YELLOW = (255, 255, 0)
 class Node:
     def __init__(self, row, col, width, total_rows):
         """
+        Represents each cell/node in the grid for the search algorithm
 
         :param row: Row that the node is located
         :param col: Column that the node is located
@@ -113,7 +115,7 @@ def h(current_node, goal_node) -> int:
 
     :param current_node: Current node being "explored"
     :param goal_node: Goal node for the algorithm
-    :return: Manhattan distance between the two nodes on the grid
+    :returns: Manhattan distance between the two nodes on the grid
     """
 
     x1, y1 = current_node.get_pos()
@@ -126,16 +128,77 @@ def algorithm(draw, grid, start_node, goal_node) -> bool:
     """
     A* Algorithm backbone
 
+    Estimated goal cost: f(n) = g(n) + h(n)
+
     :param draw: Draw function passed on with all arguments as a lambda
     :param grid: Grid representation
     :param start_node: Start (root) node for the search
     :param goal_node: Goal node for the search
     :returns : True if there is a successful path, False otherwise
     """
-    pass  # TODO: Implement algorithm
+    count = 0  # Number of nodes traversed
+    open_queue = PriorityQueue()  # (f_score, count, node)
+    open_set = set()  # Easier tracking of whether a certain node is waiting to be explored or not
+    came_from = {}
+    f = {node: float('inf') for row in grid for node in row}
+    g = {node: float('inf') for row in grid for node in row}
+
+    open_queue.put((0,  count, start_node))
+    open_set.add(start_node)
+    g[start_node] = 0
+    f[start_node] = h(start_node, goal_node)
+    
+    while not open_queue.empty():
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:  # In case user decides to close the window, mid-search
+                pygame.quit()
+
+        current_node = open_queue.get()[2]  # Get's the node with the highest priority
+        open_set.remove(current_node)
+
+        if current_node == goal_node:
+            create_path(came_from, goal_node, draw)
+            start_node.make_start()  # Used to ensure the path colour doesn't over-ride the colours
+            goal_node.make_goal()    # identifying start and goal nodes
+            return True
+
+        for neighbour in current_node.neighbours:
+            temp_g = g[current_node] + 1  # Cost of travelling to a neighbour node
+            if temp_g < g[neighbour]:
+                came_from[neighbour] = current_node  # Updates as current node is mode effective way to reach neighbour
+                g[neighbour] = temp_g
+                f[neighbour] = g[neighbour] + h(neighbour, goal_node)
+
+                if neighbour not in open_set:
+                    count += 1
+                    open_queue.put((f[neighbour], count, neighbour))
+                    open_set.add(neighbour)
+                    neighbour.make_open()
+
+        draw()
+
+        if current_node != start_node:
+            current_node.make_closed()
+    return False
 
 
-def make_grid(rows, window_width):
+def create_path(came_from, goal_node, draw):
+    """
+    Creates a path from goal node to the start node
+
+    :param came_from: Dictionary of nodes leading to their best neighbour depending on g(node)
+    :param goal_node: The goal node in the grid
+    :param draw: Draw function passed on with all arguments as a lambda
+    """
+    current_node = goal_node
+    while current_node in came_from:
+        current_node = came_from[current_node]
+        current_node.make_path()
+        draw()
+
+
+def make_grid(rows, window_width) -> list:
     """
     Creates the data structure for the grid
 
@@ -143,7 +206,7 @@ def make_grid(rows, window_width):
     :param window_width: The width (in pixels) of the display surface
     :return: A nested list representing the grid
     """
-    row_width = window_width / rows
+    row_width = window_width // rows
     grid = [[Node(i, j, row_width, rows) for j in range(rows)] for i in range(rows)]
     return grid
 
@@ -156,7 +219,7 @@ def draw_gridlines(surface, window_width, rows):
     :param window_width: The width of the display surface (pixels)
     :param rows: The number of rows in the grid
     """
-    row_width = window_width / rows
+    row_width = window_width // rows
     for i in range(rows):
         # Draw the horizontal lines
         pygame.draw.line(surface, GREY, (0, i * row_width), (window_width, i * row_width))
@@ -204,9 +267,9 @@ def main(surface, window_width, rows):
     """
     Main function for the program
 
-    :param surface:
-    :param window_width:
-    :param rows:
+    :param surface: Display surface for pygame
+    :param window_width: Width of the display surface (in pixels)
+    :param rows: Number of rows in the grid
     """
     grid = make_grid(rows, window_width)
 
@@ -257,7 +320,7 @@ def main(surface, window_width, rows):
                             node.update_neighbours(grid)
                     algorithm(lambda: draw(surface, window_width, grid, rows), grid, start_node, goal_node)
 
-                elif event.key == pygame.K_c:
+                if event.key == pygame.K_c:
                     start_node = None
                     goal_node = None
                     grid = None
